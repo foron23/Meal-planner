@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Editor directories and files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Logs and databases
+*.log
+*.sqlite3
+*.db
+/data/*.db
+/data/*.sqlite3
+
+# Environment variables
+.env
+.env.*
+
+# Tests
+.pytest_cache/
+
+# Coverage
+htmlcov/
+.coverage
+coverage.xml
+
+# Docker
+docker-compose.override.yml
+
+# Misc
+.DS_Store
+*.bak
+
+# Byte-compiled / cache
+pip-wheel-metadata/
+
+# Ignore local settings
+local_settings.py

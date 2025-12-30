@@ -1,0 +1,36 @@
+# Meal Planner Telegram Bot - Dependencies
+# Python 3.10+ required
+
+# Telegram Bot
+python-telegram-bot>=21.0
+
+# LangGraph and LangChain
+langgraph>=0.2.0
+langgraph-checkpoint-sqlite>=2.0.0
+langchain>=0.3.0
+langchain-openai>=0.2.0
+langchain-core>=0.3.0
+
+# Data validation
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+
+# Database
+aiosqlite>=0.19.0
+
+# Environment
+python-dotenv>=1.0.0
+
+# Logging
+structlog>=24.0.0
+
+# Development dependencies
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+pytest-cov>=4.0.0
+black>=24.0.0
+ruff>=0.1.0
+mypy>=1.0.0
+
+# Optional: for type checking
+types-aiofiles>=23.0.0

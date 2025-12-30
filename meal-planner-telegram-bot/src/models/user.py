@@ -4,10 +4,10 @@ User models for the Meal Planner Bot.
 This module defines Pydantic models for user data and preferences.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class User(BaseModel):
@@ -30,11 +30,10 @@ class User(BaseModel):
     first_name: str
     last_name: Optional[str] = None
     language_code: str = "es"
-    created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
-    updated_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
+    created_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserPreferences(BaseModel):
@@ -70,10 +69,9 @@ class UserPreferences(BaseModel):
     fitness_goals: Optional[str] = None
     protein_preference: Optional[str] = None
     extra_data: dict = Field(default_factory=dict)
-    updated_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
     
     def has_preferences(self) -> bool:
         """Check if the user has any preferences set."""

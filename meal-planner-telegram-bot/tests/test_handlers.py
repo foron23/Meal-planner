@@ -287,3 +287,372 @@ class TestClearHandler:
         mock_update.message.reply_text.assert_called_once()
         call_args = mock_update.message.reply_text.call_args
         assert "limpiado" in call_args[0][0].lower() or "limpiar" in call_args[0][0].lower()
+
+
+class TestPreferencesHandlerErrorCases:
+    """Tests for error cases in the /preferences command handler."""
+    
+    @pytest.mark.asyncio
+    async def test_preferences_handler_no_user(self):
+        """Test that /preferences returns early when user is None."""
+        from src.handlers.memory import preferences_handler
+        
+        # Create mock update with no user
+        mock_update = MagicMock()
+        mock_update.effective_user = None
+        mock_update.message = MagicMock()
+        
+        # Create mock context
+        mock_context = MagicMock()
+        
+        # Call handler - should return early without doing anything
+        await preferences_handler(mock_update, mock_context)
+        
+        # Verify no message was sent
+        mock_update.message.reply_text.assert_not_called()
+    
+    @pytest.mark.asyncio
+    async def test_preferences_handler_no_message(self):
+        """Test that /preferences returns early when message is None."""
+        from src.handlers.memory import preferences_handler
+        
+        # Create mock update with no message
+        mock_update = MagicMock()
+        mock_update.effective_user = MagicMock()
+        mock_update.effective_user.id = 123456
+        mock_update.message = None
+        
+        # Create mock context
+        mock_context = MagicMock()
+        
+        # Call handler - should return early without doing anything
+        await preferences_handler(mock_update, mock_context)
+        
+        # Verify no message was sent (since message is None)
+    
+    @pytest.mark.asyncio
+    async def test_preferences_handler_no_db_store(self):
+        """Test that /preferences shows error when db_store is not available."""
+        from src.handlers.memory import preferences_handler
+        
+        # Create mock update
+        mock_update = MagicMock()
+        mock_update.effective_user = MagicMock()
+        mock_update.effective_user.id = 123456
+        mock_update.message = MagicMock()
+        mock_update.message.reply_text = AsyncMock()
+        
+        # Create mock context without db_store
+        mock_context = MagicMock()
+        mock_context.application.bot_data = {}
+        
+        # Call handler
+        await preferences_handler(mock_update, mock_context)
+        
+        # Verify error message was sent
+        mock_update.message.reply_text.assert_called_once()
+        call_args = mock_update.message.reply_text.call_args
+        assert "no está disponible" in call_args[0][0]
+    
+    @pytest.mark.asyncio
+    async def test_preferences_handler_exception_handling(self):
+        """Test that /preferences handles exceptions gracefully."""
+        from src.handlers.memory import preferences_handler
+        
+        # Create mock update
+        mock_update = MagicMock()
+        mock_update.effective_user = MagicMock()
+        mock_update.effective_user.id = 123456
+        mock_update.message = MagicMock()
+        mock_update.message.reply_text = AsyncMock()
+        
+        # Create mock db_store that raises exception
+        mock_db_store = MagicMock()
+        mock_db_store.get_user_preferences = MagicMock(side_effect=Exception("Database error"))
+        
+        # Create mock context
+        mock_context = MagicMock()
+        mock_context.application.bot_data = {"db_store": mock_db_store}
+        
+        # Call handler
+        await preferences_handler(mock_update, mock_context)
+        
+        # Verify error message was sent
+        mock_update.message.reply_text.assert_called_once()
+        call_args = mock_update.message.reply_text.call_args
+        assert "error" in call_args[0][0].lower()
+
+
+class TestClearHandlerErrorCases:
+    """Tests for error cases in the /clear command handler."""
+    
+    @pytest.mark.asyncio
+    async def test_clear_handler_no_user(self):
+        """Test that /clear returns early when user is None."""
+        from src.handlers.memory import clear_handler
+        
+        # Create mock update with no user
+        mock_update = MagicMock()
+        mock_update.effective_user = None
+        mock_update.message = MagicMock()
+        
+        # Create mock context
+        mock_context = MagicMock()
+        
+        # Call handler - should return early without doing anything
+        await clear_handler(mock_update, mock_context)
+        
+        # Verify no message was sent
+        mock_update.message.reply_text.assert_not_called()
+    
+    @pytest.mark.asyncio
+    async def test_clear_handler_no_message(self):
+        """Test that /clear returns early when message is None."""
+        from src.handlers.memory import clear_handler
+        
+        # Create mock update with no message
+        mock_update = MagicMock()
+        mock_update.effective_user = MagicMock()
+        mock_update.effective_user.id = 123456
+        mock_update.message = None
+        
+        # Create mock context
+        mock_context = MagicMock()
+        
+        # Call handler - should return early without doing anything
+        await clear_handler(mock_update, mock_context)
+        
+        # Verify no message was sent (since message is None)
+    
+    @pytest.mark.asyncio
+    async def test_clear_handler_exception_handling(self):
+        """Test that /clear handles exceptions gracefully."""
+        from src.handlers.memory import clear_handler
+        
+        # Create mock update
+        mock_update = MagicMock()
+        mock_update.effective_user = MagicMock()
+        mock_update.effective_user.id = 123456
+        mock_update.message = MagicMock()
+        mock_update.message.reply_text = AsyncMock()
+        
+        # Create mock agent that raises exception
+        mock_agent = MagicMock()
+        mock_agent.clear_conversation = MagicMock(side_effect=Exception("Agent error"))
+        
+        # Create mock context
+        mock_context = MagicMock()
+        mock_context.application.bot_data = {"agent": mock_agent}
+        
+        # Call handler
+        await clear_handler(mock_update, mock_context)
+        
+        # Verify error message was sent
+        mock_update.message.reply_text.assert_called_once()
+        call_args = mock_update.message.reply_text.call_args
+        assert "error" in call_args[0][0].lower()
+
+
+class TestClearPreferencesHandler:
+    """Tests for the /clear_preferences command handler."""
+    
+    @pytest.mark.asyncio
+    async def test_clear_preferences_handler_success(self):
+        """Test that /clear_preferences successfully clears preferences."""
+        from src.handlers.memory import clear_preferences_handler
+        
+        # Create mock update
+        mock_update = MagicMock()
+        mock_update.effective_user = MagicMock()
+        mock_update.effective_user.id = 123456
+        mock_update.message = MagicMock()
+        mock_update.message.reply_text = AsyncMock()
+        
+        # Create mock db_store
+        mock_db_store = MagicMock()
+        mock_db_store.clear_user_preferences = MagicMock(return_value=True)
+        
+        # Create mock context
+        mock_context = MagicMock()
+        mock_context.application.bot_data = {"db_store": mock_db_store}
+        
+        # Call handler
+        await clear_preferences_handler(mock_update, mock_context)
+        
+        # Verify preferences were cleared
+        mock_db_store.clear_user_preferences.assert_called_once_with(123456)
+        
+        # Verify success message was sent
+        mock_update.message.reply_text.assert_called_once()
+        call_args = mock_update.message.reply_text.call_args
+        assert "borradas" in call_args[0][0].lower()
+    
+    @pytest.mark.asyncio
+    async def test_clear_preferences_handler_no_preferences(self):
+        """Test that /clear_preferences handles case when no preferences exist."""
+        from src.handlers.memory import clear_preferences_handler
+        
+        # Create mock update
+        mock_update = MagicMock()
+        mock_update.effective_user = MagicMock()
+        mock_update.effective_user.id = 123456
+        mock_update.message = MagicMock()
+        mock_update.message.reply_text = AsyncMock()
+        
+        # Create mock db_store
+        mock_db_store = MagicMock()
+        mock_db_store.clear_user_preferences = MagicMock(return_value=False)
+        
+        # Create mock context
+        mock_context = MagicMock()
+        mock_context.application.bot_data = {"db_store": mock_db_store}
+        
+        # Call handler
+        await clear_preferences_handler(mock_update, mock_context)
+        
+        # Verify preferences clear was attempted
+        mock_db_store.clear_user_preferences.assert_called_once_with(123456)
+        
+        # Verify info message was sent
+        mock_update.message.reply_text.assert_called_once()
+        call_args = mock_update.message.reply_text.call_args
+        assert "no había" in call_args[0][0].lower()
+    
+    @pytest.mark.asyncio
+    async def test_clear_preferences_handler_no_user(self):
+        """Test that /clear_preferences returns early when user is None."""
+        from src.handlers.memory import clear_preferences_handler
+        
+        # Create mock update with no user
+        mock_update = MagicMock()
+        mock_update.effective_user = None
+        mock_update.message = MagicMock()
+        
+        # Create mock context
+        mock_context = MagicMock()
+        
+        # Call handler - should return early without doing anything
+        await clear_preferences_handler(mock_update, mock_context)
+        
+        # Verify no message was sent
+        mock_update.message.reply_text.assert_not_called()
+    
+    @pytest.mark.asyncio
+    async def test_clear_preferences_handler_no_message(self):
+        """Test that /clear_preferences returns early when message is None."""
+        from src.handlers.memory import clear_preferences_handler
+        
+        # Create mock update with no message
+        mock_update = MagicMock()
+        mock_update.effective_user = MagicMock()
+        mock_update.effective_user.id = 123456
+        mock_update.message = None
+        
+        # Create mock context
+        mock_context = MagicMock()
+        
+        # Call handler - should return early without doing anything
+        await clear_preferences_handler(mock_update, mock_context)
+        
+        # Verify no message was sent (since message is None)
+    
+    @pytest.mark.asyncio
+    async def test_clear_preferences_handler_no_db_store(self):
+        """Test that /clear_preferences shows error when db_store is not available."""
+        from src.handlers.memory import clear_preferences_handler
+        
+        # Create mock update
+        mock_update = MagicMock()
+        mock_update.effective_user = MagicMock()
+        mock_update.effective_user.id = 123456
+        mock_update.message = MagicMock()
+        mock_update.message.reply_text = AsyncMock()
+        
+        # Create mock context without db_store
+        mock_context = MagicMock()
+        mock_context.application.bot_data = {}
+        
+        # Call handler
+        await clear_preferences_handler(mock_update, mock_context)
+        
+        # Verify error message was sent
+        mock_update.message.reply_text.assert_called_once()
+        call_args = mock_update.message.reply_text.call_args
+        assert "no está disponible" in call_args[0][0]
+    
+    @pytest.mark.asyncio
+    async def test_clear_preferences_handler_exception_handling(self):
+        """Test that /clear_preferences handles exceptions gracefully."""
+        from src.handlers.memory import clear_preferences_handler
+        
+        # Create mock update
+        mock_update = MagicMock()
+        mock_update.effective_user = MagicMock()
+        mock_update.effective_user.id = 123456
+        mock_update.message = MagicMock()
+        mock_update.message.reply_text = AsyncMock()
+        
+        # Create mock db_store that raises exception
+        mock_db_store = MagicMock()
+        mock_db_store.clear_user_preferences = MagicMock(side_effect=Exception("Database error"))
+        
+        # Create mock context
+        mock_context = MagicMock()
+        mock_context.application.bot_data = {"db_store": mock_db_store}
+        
+        # Call handler
+        await clear_preferences_handler(mock_update, mock_context)
+        
+        # Verify error message was sent
+        mock_update.message.reply_text.assert_called_once()
+        call_args = mock_update.message.reply_text.call_args
+        assert "error" in call_args[0][0].lower()
+
+
+class TestHelpHandler:
+    """Tests for the /help command handler."""
+    
+    @pytest.mark.asyncio
+    async def test_help_handler_shows_help(self):
+        """Test that /help shows the help information."""
+        from src.handlers.memory import help_handler
+        
+        # Create mock update
+        mock_update = MagicMock()
+        mock_update.message = MagicMock()
+        mock_update.message.reply_text = AsyncMock()
+        
+        # Create mock context
+        mock_context = MagicMock()
+        
+        # Call handler
+        await help_handler(mock_update, mock_context)
+        
+        # Verify help message was sent
+        mock_update.message.reply_text.assert_called_once()
+        call_args = mock_update.message.reply_text.call_args
+        help_text = call_args[0][0]
+        assert "ayuda" in help_text.lower()
+        assert "/start" in help_text
+        assert "/menu" in help_text
+        assert "/preferences" in help_text
+        assert "/clear" in help_text
+        assert "/clear_preferences" in help_text
+        assert "/help" in help_text
+    
+    @pytest.mark.asyncio
+    async def test_help_handler_no_message(self):
+        """Test that /help returns early when message is None."""
+        from src.handlers.memory import help_handler
+        
+        # Create mock update with no message
+        mock_update = MagicMock()
+        mock_update.message = None
+        
+        # Create mock context
+        mock_context = MagicMock()
+        
+        # Call handler - should return early without doing anything
+        await help_handler(mock_update, mock_context)
+        
+        # Verify no message was sent (since message is None)

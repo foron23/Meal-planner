@@ -6,7 +6,7 @@ These tests verify the correct behavior of the SQLite store and agent services.
 
 import os
 import tempfile
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -257,7 +257,7 @@ class TestUserModel:
     
     def test_user_with_timestamps(self):
         """Test User model with timestamps."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         user = User(
             telegram_id=123456,
             first_name="Test",

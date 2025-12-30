@@ -53,6 +53,7 @@ COPY --from=builder /opt/venv /opt/venv
 # Copy application code
 COPY --chown=appuser:appgroup src/ ./src/
 COPY --chown=appuser:appgroup scripts/ ./scripts/
+COPY --chown=appuser:appgroup tests/ ./tests/
 COPY --chown=appuser:appgroup pyproject.toml ./
 COPY --chown=appuser:appgroup README.md ./
 

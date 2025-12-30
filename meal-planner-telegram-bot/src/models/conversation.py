@@ -6,10 +6,10 @@ Note: Actual conversation persistence is handled by LangGraph checkpoints.
 These models are used for typing and data transfer.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ConversationMessage(BaseModel):
@@ -23,10 +23,9 @@ class ConversationMessage(BaseModel):
     """
     role: Literal["user", "assistant"]
     content: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ConversationState(BaseModel):
@@ -48,11 +47,10 @@ class ConversationState(BaseModel):
     user_id: int
     messages: List[ConversationMessage] = Field(default_factory=list)
     is_active: bool = True
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    last_activity: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    last_activity: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
     
     def add_message(self, role: Literal["user", "assistant"], content: str) -> None:
         """

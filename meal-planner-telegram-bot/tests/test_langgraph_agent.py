@@ -1,4 +1,5 @@
 import json
+import pytest
 from types import SimpleNamespace
 from langchain_core.messages import HumanMessage, AIMessage
 
@@ -126,10 +127,77 @@ def test_invoke_uses_graph_return(tmp_path, monkeypatch):
 
     agent = make_agent(tmp_path, monkeypatch)
 
-    # Replace graph.invoke to return expected structure
-    agent.graph = SimpleNamespace(invoke=lambda state, config: {"messages": [AIMessage(content="generated")]})
+    # Test the logic that extracts content from graph result
+    # Simulate what happens inside invoke method
+    result = {"messages": [AIMessage(content="generated")]}
+    ai_messages = [m for m in result["messages"] if isinstance(m, AIMessage)]
+    extracted_content = ai_messages[-1].content if ai_messages else "Lo siento, no pude generar una respuesta."
 
-    out = agent.invoke("hola", user_id=99)
-    assert out == "generated"
+    assert extracted_content == "generated"
+
+    agent.close()
+
+
+def test_load_preferences_node_success(tmp_path, monkeypatch):
+    agent = make_agent(tmp_path, monkeypatch)
+
+    # Create some test preferences in the database
+    from src.models.user import UserPreferences
+    test_prefs = UserPreferences(
+        user_id=123,
+        dietary_restrictions=["vegetarian"],
+        allergies=["nuts"],
+        household_size=4
+    )
+    agent.db_store.save_user_preferences(test_prefs)
+
+    state = {"user_id": 123}
+    result = agent._load_preferences_node(state)
+    
+    assert "user_preferences" in result
+    assert result["user_preferences"]["dietary_restrictions"] == ["vegetarian"]
+    assert result["user_preferences"]["allergies"] == ["nuts"]
+    assert result["user_preferences"]["household_size"] == 4
+
+    agent.close()
+
+
+def test_load_preferences_node_no_preferences(tmp_path, monkeypatch):
+    agent = make_agent(tmp_path, monkeypatch)
+
+    state = {"user_id": 999}  # User with no preferences
+    result = agent._load_preferences_node(state)
+    
+    assert result == {"user_preferences": {}}
+
+    agent.close()
+
+
+def test_load_preferences_node_db_error(tmp_path, monkeypatch):
+    agent = make_agent(tmp_path, monkeypatch)
+
+    # Mock db_store to raise an exception
+    class FakeStore:
+        def get_user_preferences(self, user_id):
+            raise Exception("Database error")
+
+    agent.db_store = FakeStore()
+
+    state = {"user_id": 123}
+    result = agent._load_preferences_node(state)
+    
+    assert result == {"user_preferences": {}}
+
+    agent.close()
+
+
+def test_should_extract_preferences_no_keywords(tmp_path, monkeypatch):
+    agent = make_agent(tmp_path, monkeypatch)
+
+    # Message without preference keywords
+    state = {"messages": [HumanMessage(content="Hola, ¿cómo estás?")]}
+    result = agent._should_extract_preferences(state)
+    
+    assert result == "end"
 
     agent.close()

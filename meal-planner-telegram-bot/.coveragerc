@@ -1,0 +1,9 @@
+[run]
+omit =
+    src/services/langgraph_agent.py
+    src/bot.py
+    src/handlers/menu.py
+    src/handlers/start.py
+    src/services/telegram_client.py
+    src/models/__init__.py
+    src/handlers/memory.py

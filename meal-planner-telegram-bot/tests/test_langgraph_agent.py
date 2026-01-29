@@ -16,6 +16,16 @@ class FakeLLM:
 def make_agent(tmp_path, monkeypatch):
     from src.services.sqlite_store import SQLiteStore
     from src.services.langgraph_agent import MealPlannerAgent
+    from src.config import Settings
+
+    # Mock the settings to avoid requiring environment variables
+    mock_settings = Settings(
+        telegram_bot_token="fake_token",
+        openai_api_key="fake_api_key",
+        database_path=str(tmp_path / "agent.db"),
+    )
+    monkeypatch.setattr("src.config._settings", mock_settings)
+    monkeypatch.setattr("src.services.langgraph_agent.get_settings", lambda: mock_settings)
 
     # Prevent real LLM calls during initialization
     monkeypatch.setattr("src.services.langgraph_agent.ChatOpenAI", FakeLLM)
@@ -149,7 +159,7 @@ def test_load_preferences_node_success(tmp_path, monkeypatch):
         allergies=["nuts"],
         household_size=4
     )
-    agent.db_store.save_user_preferences(test_prefs)
+    agent.db_store.update_user_preferences(123, test_prefs.model_dump(exclude={"id", "user_id", "updated_at"}))
 
     state = {"user_id": 123}
     result = agent._load_preferences_node(state)

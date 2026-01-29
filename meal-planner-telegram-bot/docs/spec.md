@@ -74,6 +74,7 @@ The Meal Planner Telegram Bot is designed to assist users in generating meal pro
   - Identificación de frases específicas que indican intenciones fuera del ámbito
   - **LLM-as-a-Judge**: Para mensajes ambiguos (>10 palabras sin keywords claros), usa el LLM para clasificar si es sobre comida
     - Modelo rápido (gpt-4o-mini) con temperatura 0 para consistencia
+    - **Structured Output con Pydantic**: Usa clase JudgeResponse para garantizar formato
     - Solo rechaza con confianza alta/media
     - Estrategia "fail-open" para evitar falsos positivos
   - Mensajes de rechazo amigables que redirigen a los usuarios

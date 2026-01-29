@@ -167,9 +167,10 @@ graph.add_edge("save_preferences", END)
 **Flujo LLM-as-a-Judge**:
 1. Validación basada en reglas (rápida, sin costo)
 2. Si es ambiguo (mensaje largo sin keywords), consulta al LLM judge
-3. LLM clasifica con confianza alta/media/baja
-4. Solo rechaza si confianza es alta/media y NO es sobre comida
-5. Estrategia "fail-open" en caso de error
+3. LLM usa **structured output** (Pydantic JudgeResponse) para garantizar formato
+4. LLM clasifica con confianza alta/media/baja
+5. Solo rechaza si confianza es alta/media y NO es sobre comida
+6. Estrategia "fail-open" en caso de error
 
 #### `telegram_client.py` - Telegram Integration
 - Message formatting (Markdown V2)

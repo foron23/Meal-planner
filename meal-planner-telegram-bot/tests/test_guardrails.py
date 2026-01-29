@@ -291,16 +291,25 @@ class TestMealPlannerGuardrails:
         is_valid, reason = self.guardrails.validate_input("Hola, quiero un menú")
         assert is_valid
     
-    def test_llm_judge_with_mock(self):
-        """Test LLM-as-a-Judge with a mock LLM."""
-        from types import SimpleNamespace
+    def test_llm_judge_with_mock_structured_output(self):
+        """Test LLM-as-a-Judge with structured output using mock."""
+        from src.services.guardrails import JudgeResponse
         
-        # Mock LLM that returns a valid JSON response
-        class MockLLM:
+        # Mock LLM that returns a structured JudgeResponse
+        class MockLLMStructured:
+            def with_structured_output(self, schema):
+                # Return self to chain the call
+                return self
+            
             def invoke(self, messages):
-                return SimpleNamespace(content='{"is_meal_related": false, "confidence": "high", "reason": "test rejection"}')
+                # Return a JudgeResponse object
+                return JudgeResponse(
+                    is_meal_related=False,
+                    confidence="high",
+                    reason="test rejection - not about food"
+                )
         
-        guardrails = MealPlannerGuardrails(llm_judge=MockLLM())
+        guardrails = MealPlannerGuardrails(llm_judge=MockLLMStructured())
         
         # Long message without keywords should trigger LLM judge
         long_message = "Me gustaría que me ayudes con algo muy interesante que necesito para un proyecto importante"
@@ -309,21 +318,143 @@ class TestMealPlannerGuardrails:
         # Should be rejected by the mock LLM judge
         assert not is_valid
         assert "llm_judge_rejected" in reason
+        assert "high confidence" in reason
     
     def test_llm_judge_approves_ambiguous_meal_request(self):
         """Test that LLM judge can approve ambiguous meal-related requests."""
-        from types import SimpleNamespace
+        from src.services.guardrails import JudgeResponse
         
         # Mock LLM that approves the request
-        class MockLLM:
+        class MockLLMStructured:
+            def with_structured_output(self, schema):
+                return self
+            
             def invoke(self, messages):
-                return SimpleNamespace(content='{"is_meal_related": true, "confidence": "high", "reason": "discusses meal planning"}')
+                return JudgeResponse(
+                    is_meal_related=True,
+                    confidence="high",
+                    reason="discusses meal planning for family"
+                )
         
-        guardrails = MealPlannerGuardrails(llm_judge=MockLLM())
+        guardrails = MealPlannerGuardrails(llm_judge=MockLLMStructured())
         
         # Ambiguous message that might be meal-related
         message = "Necesito organizar algo para la semana que viene para toda la familia"
         is_valid, reason = guardrails.validate_input(message)
         
         # Should be approved
+        assert is_valid
+    
+    def test_llm_judge_with_longer_texts(self):
+        """Test LLM judge with longer, more complex texts."""
+        from src.services.guardrails import JudgeResponse
+        
+        # Mock LLM for testing longer texts
+        class MockLLMForLongText:
+            def __init__(self, meal_related):
+                self.meal_related = meal_related
+            
+            def with_structured_output(self, schema):
+                return self
+            
+            def invoke(self, messages):
+                if self.meal_related:
+                    return JudgeResponse(
+                        is_meal_related=True,
+                        confidence="medium",
+                        reason="appears to be about meal planning despite length"
+                    )
+                else:
+                    return JudgeResponse(
+                        is_meal_related=False,
+                        confidence="high",
+                        reason="clearly about non-food topics despite being a long message"
+                    )
+        
+        # Test 1: Long text that IS about meal planning (without obvious keywords)
+        long_meal_text = (
+            "Estoy buscando ayuda para organizar todas las comidas de la próxima semana "
+            "para mi familia completa que incluye cuatro adultos y dos niños pequeños. "
+            "Necesitaría ideas que sean nutritivas pero también económicas y que no requieran "
+            "demasiado tiempo de preparación porque trabajo todo el día y llego tarde a casa."
+        )
+        
+        guardrails_meal = MealPlannerGuardrails(llm_judge=MockLLMForLongText(meal_related=True))
+        is_valid, reason = guardrails_meal.validate_input(long_meal_text)
+        assert is_valid, "Long meal-related text should be accepted"
+        
+        # Test 2: Long ambiguous text without obvious keywords that LLM judge will evaluate
+        # This text is long but doesn't contain obvious off-topic keywords
+        long_ambiguous_text = (
+            "Tengo una situación bastante compleja que resolver en los próximos días "
+            "relacionada con la organización de actividades para un grupo grande de amigos "
+            "que vienen de visita y necesito estructurar todo de manera eficiente considerando "
+            "varios factores como el tiempo disponible y las preferencias de cada uno."
+        )
+        
+        guardrails_non_meal = MealPlannerGuardrails(llm_judge=MockLLMForLongText(meal_related=False))
+        is_valid, reason = guardrails_non_meal.validate_input(long_ambiguous_text)
+        assert not is_valid, "Long non-meal text should be rejected by LLM judge"
+        assert "high confidence" in reason
+        
+        # Test 3: Very long meal-related text (50+ words)
+        very_long_meal_text = (
+            "Buenos días, estoy planeando un evento familiar grande para el próximo mes "
+            "donde estaremos celebrando varios cumpleaños juntos y necesito coordinar todo "
+            "lo relacionado con la alimentación de aproximadamente veinte personas que asistirán. "
+            "Entre los invitados hay personas con diferentes necesidades y preferencias: algunos "
+            "son vegetarianos, otros tienen intolerancia al gluten, y hay niños pequeños que son "
+            "bastante selectivos. Me gustaría recibir orientación sobre cómo estructurar los "
+            "diferentes platos y asegurarme de que todos puedan disfrutar de opciones adecuadas "
+            "sin que resulte demasiado complicado o costoso para nosotros como anfitriones."
+        )
+        
+        guardrails_very_long = MealPlannerGuardrails(llm_judge=MockLLMForLongText(meal_related=True))
+        is_valid, reason = guardrails_very_long.validate_input(very_long_meal_text)
+        # This should pass validation (either by keywords or LLM judge)
+        assert is_valid, "Very long meal text should be accepted"
+    
+    def test_llm_judge_medium_confidence_rejection(self):
+        """Test that medium confidence also triggers rejection."""
+        from src.services.guardrails import JudgeResponse
+        
+        class MockLLM:
+            def with_structured_output(self, schema):
+                return self
+            
+            def invoke(self, messages):
+                return JudgeResponse(
+                    is_meal_related=False,
+                    confidence="medium",
+                    reason="somewhat unclear but leans towards non-food topic"
+                )
+        
+        guardrails = MealPlannerGuardrails(llm_judge=MockLLM())
+        long_message = "Ayúdame con mi situación complicada que necesito resolver pronto para completar"
+        is_valid, reason = guardrails.validate_input(long_message)
+        
+        # Should be rejected even with medium confidence
+        assert not is_valid
+        assert "medium confidence" in reason
+    
+    def test_llm_judge_low_confidence_allows(self):
+        """Test that low confidence does NOT trigger rejection."""
+        from src.services.guardrails import JudgeResponse
+        
+        class MockLLM:
+            def with_structured_output(self, schema):
+                return self
+            
+            def invoke(self, messages):
+                return JudgeResponse(
+                    is_meal_related=False,
+                    confidence="low",
+                    reason="very ambiguous, hard to determine"
+                )
+        
+        guardrails = MealPlannerGuardrails(llm_judge=MockLLM())
+        long_message = "Necesito ayuda para organizar mis cosas de la próxima semana"
+        is_valid, reason = guardrails.validate_input(long_message)
+        
+        # Should be allowed despite is_meal_related=False because confidence is low
         assert is_valid

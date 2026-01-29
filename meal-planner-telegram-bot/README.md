@@ -293,6 +293,7 @@ El bot implementa un sistema robusto de guardarraíles para garantizar que el mo
 - **🆕 LLM-as-a-Judge**: Para casos ambiguos, utiliza el propio LLM para clasificar si la solicitud está relacionada con planificación de menús
   - Se activa automáticamente para mensajes largos sin palabras clave claras
   - Usa un modelo rápido (gpt-4o-mini) con temperatura 0 para clasificación consistente
+  - **Structured Output**: Usa Pydantic para garantizar formato de respuesta (JudgeResponse)
   - Solo rechaza cuando el LLM tiene alta/media confianza de que NO es sobre comida
   - Estrategia "fail-open": en caso de error, permite la solicitud (seguridad sin bloquear usuarios legítimos)
 

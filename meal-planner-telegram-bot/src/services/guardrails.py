@@ -11,26 +11,40 @@ import re
 import threading
 from typing import Literal, Optional
 
+from pydantic import BaseModel, Field
+
 logger = logging.getLogger(__name__)
+
+
+class JudgeResponse(BaseModel):
+    """
+    Structured response from the LLM-as-a-Judge.
+    
+    This model ensures the LLM returns data in the expected format
+    using structured output mode.
+    """
+    is_meal_related: bool = Field(
+        description="True if the request is about meal planning, food, recipes, or nutrition. False otherwise."
+    )
+    confidence: Literal["high", "medium", "low"] = Field(
+        description="Confidence level: 'high' if very certain, 'medium' if somewhat ambiguous, 'low' if difficult to determine"
+    )
+    reason: str = Field(
+        description="Brief explanation of the classification decision"
+    )
+
 
 # LLM-as-a-Judge prompt for validating ambiguous requests
 LLM_JUDGE_PROMPT = """Eres un clasificador de temas. Tu tarea es determinar si una solicitud del usuario está relacionada con planificación de menús, comidas, recetas o nutrición.
 
 Solicitud del usuario: "{message}"
 
-Responde SOLO con un JSON en el siguiente formato:
-{{
-    "is_meal_related": true o false,
-    "confidence": "high", "medium" o "low",
-    "reason": "breve explicación de tu decisión"
-}}
-
 Criterios:
 - is_meal_related = true si la solicitud trata sobre: comidas, menús, recetas, ingredientes, nutrición, dietas, cocina, planificación alimentaria
 - is_meal_related = false si trata sobre: programación, matemáticas, tareas escolares, consejos no relacionados con comida, temas generales
 - confidence = "high" si estás muy seguro, "medium" si hay cierta ambigüedad, "low" si es difícil de determinar
 
-Responde SOLO con el JSON, sin texto adicional."""
+Clasifica la solicitud y proporciona una breve explicación."""
 
 
 class MealPlannerGuardrails:
@@ -223,7 +237,8 @@ class MealPlannerGuardrails:
         Use LLM-as-a-Judge to validate ambiguous requests.
         
         This method uses the LLM itself to determine if a request is meal-planning
-        related when keyword-based validation is inconclusive.
+        related when keyword-based validation is inconclusive. Uses structured
+        output to guarantee the response format.
         
         Args:
             message: User's message to validate
@@ -238,25 +253,18 @@ class MealPlannerGuardrails:
             # Format the judge prompt with the user's message
             judge_prompt = LLM_JUDGE_PROMPT.format(message=message)
             
+            # Use structured output with the JudgeResponse model
+            # This guarantees the LLM returns data in the expected format
+            structured_llm = self._llm_judge.with_structured_output(JudgeResponse)
+            
             # Call the LLM judge
             from langchain_core.messages import HumanMessage
-            response = self._llm_judge.invoke([HumanMessage(content=judge_prompt)])
+            result: JudgeResponse = structured_llm.invoke([HumanMessage(content=judge_prompt)])
             
-            # Parse the JSON response
-            content = response.content.strip()
-            
-            # Handle markdown code blocks
-            if content.startswith("```"):
-                content = content.split("```")[1]
-                if content.startswith("json"):
-                    content = content[4:]
-                content = content.strip()
-            
-            result = json.loads(content)
-            
-            is_meal_related = result.get("is_meal_related", True)
-            confidence = result.get("confidence", "low")
-            reason = result.get("reason", "no reason provided")
+            # Extract fields from the structured response
+            is_meal_related = result.is_meal_related
+            confidence = result.confidence
+            reason = result.reason
             
             logger.info(f"LLM judge result: meal_related={is_meal_related}, confidence={confidence}, reason={reason}")
             
@@ -266,10 +274,6 @@ class MealPlannerGuardrails:
             
             return True, "llm_judge_approved"
             
-        except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse LLM judge response: {e}")
-            # On parse error, err on the side of allowing (fail open)
-            return True, "llm_judge_parse_error"
         except Exception as e:
             logger.error(f"LLM judge validation failed: {e}")
             # On error, err on the side of allowing (fail open)

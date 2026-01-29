@@ -69,25 +69,38 @@ def main():
     print()
     
     # Demonstrate LLM-as-a-Judge with mock
-    print("\n🤖 MODO 2: Validación con LLM-as-a-Judge")
+    print("\n🤖 MODO 2: Validación con LLM-as-a-Judge (Structured Output)")
     print("=" * 80)
     print("Para casos ambiguos (mensajes largos sin palabras clave), se usa el LLM")
     print("para clasificar si la solicitud está relacionada con comida.")
+    print("Usa Pydantic (JudgeResponse) para garantizar el formato de respuesta.")
     print()
     
-    # Mock LLM for demonstration
-    from types import SimpleNamespace
+    # Mock LLM for demonstration with structured output
+    from src.services.guardrails import JudgeResponse
     
     class MockLLMJudge:
-        """Mock LLM that simulates the judge behavior."""
+        """Mock LLM that simulates the judge behavior with structured output."""
+        def with_structured_output(self, schema):
+            # Return self to simulate chaining
+            return self
+        
         def invoke(self, messages):
             # Simple mock: if message contains certain words, classify accordingly
             message_content = str(messages)
-            if "proyecto" in message_content.lower() and "escolar" not in message_content.lower():
-                # Ambiguous case - could be meal planning project
-                return SimpleNamespace(content='{"is_meal_related": true, "confidence": "medium", "reason": "podría ser sobre planificación de menús"}')
+            if "familia" in message_content.lower():
+                # Ambiguous case - could be meal planning
+                return JudgeResponse(
+                    is_meal_related=True,
+                    confidence="medium",
+                    reason="podría ser sobre planificación de comidas familiares"
+                )
             else:
-                return SimpleNamespace(content='{"is_meal_related": false, "confidence": "high", "reason": "no relacionado con comidas"}')
+                return JudgeResponse(
+                    is_meal_related=False,
+                    confidence="high",
+                    reason="no relacionado con comidas"
+                )
     
     guardrails_with_judge = MealPlannerGuardrails(llm_judge=MockLLMJudge())
     

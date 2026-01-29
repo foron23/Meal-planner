@@ -80,6 +80,7 @@ class MealPlannerGuardrails:
         "cómo invertir",
         "invertir en bolsa",
         "ayúdame a invertir",
+        "invertir mi dinero",
         "cómo ganar dinero",
         "ganar dinero",
         "escribe un ensayo",

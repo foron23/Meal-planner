@@ -290,6 +290,11 @@ El bot implementa un sistema robusto de guardarraíles para garantizar que el mo
 - **Análisis de Patrones de Código**: Detecta código fuente en los mensajes y lo rechaza automáticamente
 - **Filtrado de Frases**: Identifica frases específicas que indican intenciones fuera del ámbito (ej: "ayúdame con mi tarea", "escribe código")
 - **Análisis de Palabras Clave**: Compara palabras clave del mensaje con listas de temas permitidos y prohibidos
+- **🆕 LLM-as-a-Judge**: Para casos ambiguos, utiliza el propio LLM para clasificar si la solicitud está relacionada con planificación de menús
+  - Se activa automáticamente para mensajes largos sin palabras clave claras
+  - Usa un modelo rápido (gpt-4o-mini) con temperatura 0 para clasificación consistente
+  - Solo rechaza cuando el LLM tiene alta/media confianza de que NO es sobre comida
+  - Estrategia "fail-open": en caso de error, permite la solicitud (seguridad sin bloquear usuarios legítimos)
 
 ### Validación de Salida
 - **Revisión de Respuestas**: Verifica que las respuestas del modelo no contengan código, notación matemática avanzada u otro contenido fuera de tema

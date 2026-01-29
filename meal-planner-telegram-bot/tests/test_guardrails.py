@@ -281,3 +281,49 @@ class TestMealPlannerGuardrails:
         # Should be accepted regardless of case
         is_valid, reason = self.guardrails.validate_input("NECESITO UN MENÚ VEGETARIANO")
         assert is_valid
+    
+    # ===== LLM-as-a-Judge tests =====
+    
+    def test_llm_judge_disabled_by_default(self):
+        """Test that guardrails work without LLM judge."""
+        guardrails = MealPlannerGuardrails()
+        # Should work normally without LLM judge
+        is_valid, reason = self.guardrails.validate_input("Hola, quiero un menú")
+        assert is_valid
+    
+    def test_llm_judge_with_mock(self):
+        """Test LLM-as-a-Judge with a mock LLM."""
+        from types import SimpleNamespace
+        
+        # Mock LLM that returns a valid JSON response
+        class MockLLM:
+            def invoke(self, messages):
+                return SimpleNamespace(content='{"is_meal_related": false, "confidence": "high", "reason": "test rejection"}')
+        
+        guardrails = MealPlannerGuardrails(llm_judge=MockLLM())
+        
+        # Long message without keywords should trigger LLM judge
+        long_message = "Me gustaría que me ayudes con algo muy interesante que necesito para un proyecto importante"
+        is_valid, reason = guardrails.validate_input(long_message)
+        
+        # Should be rejected by the mock LLM judge
+        assert not is_valid
+        assert "llm_judge_rejected" in reason
+    
+    def test_llm_judge_approves_ambiguous_meal_request(self):
+        """Test that LLM judge can approve ambiguous meal-related requests."""
+        from types import SimpleNamespace
+        
+        # Mock LLM that approves the request
+        class MockLLM:
+            def invoke(self, messages):
+                return SimpleNamespace(content='{"is_meal_related": true, "confidence": "high", "reason": "discusses meal planning"}')
+        
+        guardrails = MealPlannerGuardrails(llm_judge=MockLLM())
+        
+        # Ambiguous message that might be meal-related
+        message = "Necesito organizar algo para la semana que viene para toda la familia"
+        is_valid, reason = guardrails.validate_input(message)
+        
+        # Should be approved
+        assert is_valid

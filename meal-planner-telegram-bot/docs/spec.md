@@ -66,11 +66,16 @@ The Meal Planner Telegram Bot is designed to assist users in generating meal pro
   - **MealPlannerGuardrails**: Clase principal de validación
   - **Validación de Entrada**: Detecta y rechaza solicitudes fuera de tema antes de llamar al LLM
   - **Validación de Salida**: Verifica que las respuestas del LLM permanezcan en el tema
+  - **LLM-as-a-Judge**: Clasificación inteligente para casos ambiguos
   - **Monitoreo**: Registra activaciones de guardarraíles para auditoría
 - **Características de Seguridad**:
   - Detección de palabras clave prohibidas (código, matemáticas, tareas, etc.)
   - Análisis de patrones de código mediante expresiones regulares
   - Identificación de frases específicas que indican intenciones fuera del ámbito
+  - **LLM-as-a-Judge**: Para mensajes ambiguos (>10 palabras sin keywords claros), usa el LLM para clasificar si es sobre comida
+    - Modelo rápido (gpt-4o-mini) con temperatura 0 para consistencia
+    - Solo rechaza con confianza alta/media
+    - Estrategia "fail-open" para evitar falsos positivos
   - Mensajes de rechazo amigables que redirigen a los usuarios
   - Estadísticas de rechazo para análisis de seguridad
 - **Prompt del Sistema Reforzado**: Instrucciones explícitas en el prompt del sistema para rechazar solicitudes no relacionadas con comida/nutrición

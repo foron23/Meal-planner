@@ -5,12 +5,32 @@ This module implements input validation and safety checks to ensure the LLM
 is only used for meal planning purposes and not for unrelated tasks.
 """
 
+import json
 import logging
 import re
 import threading
-from typing import Literal
+from typing import Literal, Optional
 
 logger = logging.getLogger(__name__)
+
+# LLM-as-a-Judge prompt for validating ambiguous requests
+LLM_JUDGE_PROMPT = """Eres un clasificador de temas. Tu tarea es determinar si una solicitud del usuario está relacionada con planificación de menús, comidas, recetas o nutrición.
+
+Solicitud del usuario: "{message}"
+
+Responde SOLO con un JSON en el siguiente formato:
+{{
+    "is_meal_related": true o false,
+    "confidence": "high", "medium" o "low",
+    "reason": "breve explicación de tu decisión"
+}}
+
+Criterios:
+- is_meal_related = true si la solicitud trata sobre: comidas, menús, recetas, ingredientes, nutrición, dietas, cocina, planificación alimentaria
+- is_meal_related = false si trata sobre: programación, matemáticas, tareas escolares, consejos no relacionados con comida, temas generales
+- confidence = "high" si estás muy seguro, "medium" si hay cierta ambigüedad, "low" si es difícil de determinar
+
+Responde SOLO con el JSON, sin texto adicional."""
 
 
 class MealPlannerGuardrails:
@@ -94,11 +114,19 @@ class MealPlannerGuardrails:
         "mi proyecto",
     }
     
-    def __init__(self):
-        """Initialize the guardrails system."""
+    def __init__(self, llm_judge: Optional[any] = None):
+        """
+        Initialize the guardrails system.
+        
+        Args:
+            llm_judge: Optional LLM instance to use as a judge for ambiguous cases.
+                      If None, LLM-as-a-Judge feature is disabled.
+        """
         self._rejection_count = 0
         self._lock = threading.Lock()
-        logger.info("MealPlannerGuardrails initialized")
+        self._llm_judge = llm_judge
+        self._llm_judge_enabled = llm_judge is not None
+        logger.info(f"MealPlannerGuardrails initialized (LLM-as-a-Judge: {'enabled' if self._llm_judge_enabled else 'disabled'})")
     
     def validate_input(self, message: str) -> tuple[bool, str | None]:
         """
@@ -174,14 +202,78 @@ class MealPlannerGuardrails:
             if any(greeting in message_lower for greeting in greetings):
                 return True, None
         
-        # If message is long but has no meal planning indicators, be suspicious
-        # but don't reject immediately (let the system prompt guide the LLM)
+        # If message is long but has no meal planning indicators, use LLM-as-a-Judge if available
         if len(message.split()) > 10 and not on_topic_matches:
-            logger.info(f"Long message with no meal planning keywords, monitoring: '{message[:50]}...'")
-            # Don't reject, but log for monitoring
+            logger.info(f"Long message with no meal planning keywords, checking with LLM judge: '{message[:50]}...'")
+            
+            # Use LLM-as-a-Judge for ambiguous cases
+            if self._llm_judge_enabled:
+                is_valid, judge_reason = self._validate_with_llm_judge(message)
+                if not is_valid:
+                    logger.warning(f"LLM judge rejected: {judge_reason}")
+                    with self._lock:
+                        self._rejection_count += 1
+                    return False, f"llm_judge_rejected: {judge_reason}"
         
         # Default: allow (system prompt will guide the LLM)
         return True, None
+    
+    def _validate_with_llm_judge(self, message: str) -> tuple[bool, str]:
+        """
+        Use LLM-as-a-Judge to validate ambiguous requests.
+        
+        This method uses the LLM itself to determine if a request is meal-planning
+        related when keyword-based validation is inconclusive.
+        
+        Args:
+            message: User's message to validate
+            
+        Returns:
+            Tuple of (is_valid, reason)
+        """
+        if not self._llm_judge_enabled:
+            return True, "llm_judge_disabled"
+        
+        try:
+            # Format the judge prompt with the user's message
+            judge_prompt = LLM_JUDGE_PROMPT.format(message=message)
+            
+            # Call the LLM judge
+            from langchain_core.messages import HumanMessage
+            response = self._llm_judge.invoke([HumanMessage(content=judge_prompt)])
+            
+            # Parse the JSON response
+            content = response.content.strip()
+            
+            # Handle markdown code blocks
+            if content.startswith("```"):
+                content = content.split("```")[1]
+                if content.startswith("json"):
+                    content = content[4:]
+                content = content.strip()
+            
+            result = json.loads(content)
+            
+            is_meal_related = result.get("is_meal_related", True)
+            confidence = result.get("confidence", "low")
+            reason = result.get("reason", "no reason provided")
+            
+            logger.info(f"LLM judge result: meal_related={is_meal_related}, confidence={confidence}, reason={reason}")
+            
+            # Only reject if LLM is confident it's not meal-related
+            if not is_meal_related and confidence in ["high", "medium"]:
+                return False, f"{confidence} confidence: {reason}"
+            
+            return True, "llm_judge_approved"
+            
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse LLM judge response: {e}")
+            # On parse error, err on the side of allowing (fail open)
+            return True, "llm_judge_parse_error"
+        except Exception as e:
+            logger.error(f"LLM judge validation failed: {e}")
+            # On error, err on the side of allowing (fail open)
+            return True, "llm_judge_error"
     
     def get_rejection_message(self, rejection_reason: str | None = None) -> str:
         """

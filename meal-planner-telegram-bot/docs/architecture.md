@@ -154,13 +154,22 @@ graph.add_edge("save_preferences", END)
 - **Output Validation**: Asegura que las respuestas permanezcan en el tema
 - **Off-topic Detection**: Detecta y rechaza solicitudes de programación, matemáticas, tareas, etc.
 - **Keywords & Patterns**: Usa análisis de palabras clave y patrones regex
+- **LLM-as-a-Judge**: Clasificación inteligente para casos ambiguos usando el propio LLM
 - **Statistics Tracking**: Registra rechazos para análisis de seguridad
 
 **Tipos de Validación**:
 - Detección de palabras clave prohibidas (código, matemáticas, tareas escolares)
 - Análisis de patrones de código mediante regex
 - Identificación de frases específicas fuera de tema
+- **LLM-as-a-Judge para mensajes ambiguos**: Usa gpt-4o-mini para clasificar solicitudes sin palabras clave claras
 - Verificación de que respuestas no contengan código o fórmulas matemáticas
+
+**Flujo LLM-as-a-Judge**:
+1. Validación basada en reglas (rápida, sin costo)
+2. Si es ambiguo (mensaje largo sin keywords), consulta al LLM judge
+3. LLM clasifica con confianza alta/media/baja
+4. Solo rechaza si confianza es alta/media y NO es sobre comida
+5. Estrategia "fail-open" en caso de error
 
 #### `telegram_client.py` - Telegram Integration
 - Message formatting (Markdown V2)

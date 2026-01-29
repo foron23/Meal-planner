@@ -7,6 +7,7 @@ is only used for meal planning purposes and not for unrelated tasks.
 
 import logging
 import re
+import threading
 from typing import Literal
 
 logger = logging.getLogger(__name__)
@@ -60,7 +61,7 @@ class MealPlannerGuardrails:
         "traducir idioma", "resumir libro", "analizar texto",
         "crear presentación", "hacer homework", "tarea escolar",
         # Other topics
-        "política", "religión", "finanzas personales", "inversiones",
+        "política", "religión", "finanzas", "inversiones",
         "consejo legal", "diagnóstico médico", "tratamiento médico",
     }
     
@@ -95,7 +96,8 @@ class MealPlannerGuardrails:
     
     def __init__(self):
         """Initialize the guardrails system."""
-        self.rejection_count = 0
+        self._rejection_count = 0
+        self._lock = threading.Lock()
         logger.info("MealPlannerGuardrails initialized")
     
     def validate_input(self, message: str) -> tuple[bool, str | None]:
@@ -120,44 +122,47 @@ class MealPlannerGuardrails:
             if phrase in message_lower:
                 reason = f"off_topic_phrase_detected: {phrase}"
                 logger.warning(f"Guardrail triggered: {reason}")
-                self.rejection_count += 1
+                with self._lock:
+                    self._rejection_count += 1
                 return False, reason
         
         # Check for code patterns (looking for code-like syntax)
+        # Made more specific to reduce false positives
         code_patterns = [
-            r'def\s+\w+\s*\(',  # Python function definition
-            r'function\s+\w+\s*\(',  # JavaScript function
-            r'class\s+\w+\s*[:{]',  # Class definition
-            r'import\s+\w+',  # Import statements
-            r'from\s+\w+\s+import',  # Python import
-            r'<\w+>.*</\w+>',  # HTML tags
-            r'\w+\s*=\s*\w+\s*[\+\-\*/]',  # Variable assignments with math
+            r'\bdef\s+[a-zA-Z_]\w*\s*\(',  # Python function definition
+            r'\bfunction\s+[a-zA-Z_]\w*\s*\(',  # JavaScript function
+            r'\bclass\s+[A-Z][a-zA-Z_]*\s*[:{]',  # Class definition (capitalized)
+            r'\bimport\s+[a-zA-Z_]',  # Import statements
+            r'\bfrom\s+[a-zA-Z_]+\s+import',  # Python import
+            r'<(?:div|span|p|html|body|head|script|style)\b[^>]*>',  # Common HTML tags
         ]
         
         for pattern in code_patterns:
             if re.search(pattern, message, re.IGNORECASE):
                 reason = f"code_pattern_detected: {pattern}"
                 logger.warning(f"Guardrail triggered: {reason}")
-                self.rejection_count += 1
+                with self._lock:
+                    self._rejection_count += 1
                 return False, reason
         
-        # Check for off-topic keywords
+        # Check for off-topic keywords (whole word matching to avoid substring issues)
         off_topic_matches = [
             keyword for keyword in self.OFF_TOPIC_KEYWORDS
-            if keyword in message_lower
+            if re.search(r'\b' + re.escape(keyword) + r'\b', message_lower)
         ]
         
-        # Check for meal planning keywords
+        # Check for meal planning keywords (whole word matching)
         on_topic_matches = [
             keyword for keyword in self.MEAL_PLANNING_KEYWORDS
-            if keyword in message_lower
+            if re.search(r'\b' + re.escape(keyword) + r'\b', message_lower)
         ]
         
         # If we have off-topic keywords but no on-topic ones, likely off-topic
         if off_topic_matches and not on_topic_matches:
             reason = f"off_topic_keywords: {', '.join(off_topic_matches[:3])}"
             logger.warning(f"Guardrail triggered: {reason}")
-            self.rejection_count += 1
+            with self._lock:
+                self._rejection_count += 1
             return False, reason
         
         # For very short messages (greetings, etc.), allow them
@@ -240,6 +245,7 @@ class MealPlannerGuardrails:
         Returns:
             Dictionary with guardrail statistics
         """
-        return {
-            "total_rejections": self.rejection_count,
-        }
+        with self._lock:
+            return {
+                "total_rejections": self._rejection_count,
+            }

@@ -23,6 +23,7 @@ from src.config import (
 )
 from src.models.user import UserPreferences
 from src.services.sqlite_store import SQLiteStore
+from src.services.guardrails import MealPlannerGuardrails
 
 logger = logging.getLogger(__name__)
 
@@ -68,13 +69,23 @@ class MealPlannerAgent:
         self.settings = get_settings()
         self.db_store = db_store
         
-        # Initialize LLM
+        # Initialize LLM first (needed for guardrails)
         self.llm = ChatOpenAI(
             model=self.settings.llm_model,
             temperature=self.settings.llm_temperature,
             max_tokens=self.settings.llm_max_tokens,
             api_key=self.settings.openai_api_key,
         )
+        
+        # Initialize guardrails with LLM-as-a-Judge
+        # Use a lighter/faster model for the judge to reduce latency
+        judge_llm = ChatOpenAI(
+            model="gpt-4o-mini",  # Fast and cheap for classification
+            temperature=0.0,  # Deterministic for consistency
+            max_tokens=150,  # Short response needed
+            api_key=self.settings.openai_api_key,
+        )
+        self.guardrails = MealPlannerGuardrails(llm_judge=judge_llm)
         
         # Initialize checkpoint saver for conversation persistence
         # Create a persistent connection for the checkpointer
@@ -425,6 +436,12 @@ class MealPlannerAgent:
         Returns:
             AI-generated response text
         """
+        # Validate input with guardrails
+        is_valid, rejection_reason = self.guardrails.validate_input(message)
+        if not is_valid:
+            logger.warning(f"Input rejected by guardrails for user {user_id}: {rejection_reason}")
+            return self.guardrails.get_rejection_message(rejection_reason)
+        
         if thread_id is None:
             thread_id = str(user_id)
         
@@ -451,7 +468,14 @@ class MealPlannerAgent:
             # Extract the last AI message
             ai_messages = [m for m in result["messages"] if isinstance(m, AIMessage)]
             if ai_messages:
-                return ai_messages[-1].content
+                response = ai_messages[-1].content
+                
+                # Validate output with guardrails
+                if not self.guardrails.validate_output(response):
+                    logger.warning(f"Output rejected by guardrails for user {user_id}")
+                    return self.guardrails.get_rejection_message("output_validation_failed")
+                
+                return response
             
             return "Lo siento, no pude generar una respuesta."
         except Exception as e:
@@ -492,3 +516,12 @@ class MealPlannerAgent:
             logger.info("MealPlannerAgent closed")
         except Exception as e:
             logger.warning(f"Error closing agent: {e}")
+    
+    def get_guardrail_stats(self) -> dict:
+        """
+        Get guardrail statistics.
+        
+        Returns:
+            Dictionary with guardrail activation statistics
+        """
+        return self.guardrails.get_stats()

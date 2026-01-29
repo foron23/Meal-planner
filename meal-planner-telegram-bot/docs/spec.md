@@ -56,6 +56,31 @@ The Meal Planner Telegram Bot is designed to assist users in generating meal pro
   - Uso de `Application` en lugar de `Updater`
   - Implementación de `ConversationHandler` para flujos complejos
 
+### DCR-005: Sistema de Guardarraíles de Seguridad
+- **Fecha**: 2026-01-29
+- **Autor**: Development Team
+- **Estado**: Implementado
+- **Descripción**: Implementación de guardarraíles para prevenir el uso indebido del modelo LLM para propósitos no relacionados con planificación de menús.
+- **Justificación**: Garantizar que el modelo solo se use para su propósito específico (planificación de comidas) y no para tareas arbitrarias como programación, matemáticas, tareas escolares, etc. Esto mejora la seguridad, reduce costos de API y mantiene la especialización del bot.
+- **Componentes**:
+  - **MealPlannerGuardrails**: Clase principal de validación
+  - **Validación de Entrada**: Detecta y rechaza solicitudes fuera de tema antes de llamar al LLM
+  - **Validación de Salida**: Verifica que las respuestas del LLM permanezcan en el tema
+  - **LLM-as-a-Judge**: Clasificación inteligente para casos ambiguos
+  - **Monitoreo**: Registra activaciones de guardarraíles para auditoría
+- **Características de Seguridad**:
+  - Detección de palabras clave prohibidas (código, matemáticas, tareas, etc.)
+  - Análisis de patrones de código mediante expresiones regulares
+  - Identificación de frases específicas que indican intenciones fuera del ámbito
+  - **LLM-as-a-Judge**: Para mensajes ambiguos (>10 palabras sin keywords claros), usa el LLM para clasificar si es sobre comida
+    - Modelo rápido (gpt-4o-mini) con temperatura 0 para consistencia
+    - **Structured Output con Pydantic**: Usa clase JudgeResponse para garantizar formato
+    - Solo rechaza con confianza alta/media
+    - Estrategia "fail-open" para evitar falsos positivos
+  - Mensajes de rechazo amigables que redirigen a los usuarios
+  - Estadísticas de rechazo para análisis de seguridad
+- **Prompt del Sistema Reforzado**: Instrucciones explícitas en el prompt del sistema para rechazar solicitudes no relacionadas con comida/nutrición
+
 ---
 
 ## Features
@@ -273,6 +298,12 @@ python src/bot.py
 3. **User Data**: Mínima información personal almacenada
 4. **Rate Limiting**: Implementado para prevenir abuso
 5. **Input Validation**: Sanitización de inputs del usuario
+6. **Guardarraíles de Modelo**: Sistema de validación que previene el uso del LLM para propósitos no relacionados con planificación de menús
+   - Validación de entrada para detectar solicitudes fuera de tema
+   - Validación de salida para asegurar respuestas apropiadas
+   - Rechazo de solicitudes de programación, matemáticas, tareas escolares, etc.
+   - Logging y monitoreo de intentos de uso indebido
+   - Prompt del sistema reforzado con límites estrictos
 
 ---
 

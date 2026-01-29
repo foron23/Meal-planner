@@ -16,6 +16,7 @@ El Meal Planner Bot es un asistente conversacional que ayuda a los usuarios a pl
 - 🧠 **Memoria a Largo Plazo**: Recuerda tus preferencias entre sesiones
 - 🥗 **Personalización**: Adapta menús según restricciones dietéticas, alergias y gustos
 - 💾 **Persistencia SQLite**: Almacena conversaciones y preferencias de forma persistente
+- 🛡️ **Guardarraíles de Seguridad**: Sistema de validación que asegura el uso exclusivo para planificación de menús
 - 🐳 **Docker Ready**: Fácil despliegue con Docker y Docker Compose
 
 ## 🏗️ Arquitectura
@@ -73,6 +74,7 @@ meal-planner-telegram-bot/
 │   ├── services/
 │   │   ├── langgraph_agent.py    # Agente LangGraph con checkpoint
 │   │   ├── sqlite_store.py       # Store para usuarios/preferencias
+│   │   ├── guardrails.py         # Sistema de guardarraíles de seguridad
 │   │   └── telegram_client.py    # Cliente Telegram (opcional)
 │   ├── models/
 │   │   ├── user.py               # Modelos User, UserPreferences
@@ -83,7 +85,9 @@ meal-planner-telegram-bot/
 │   └── init_db.py                # Script de inicialización de BD
 ├── tests/
 │   ├── test_handlers.py
-│   └── test_services.py
+│   ├── test_services.py
+│   ├── test_guardrails.py        # Tests de guardarraíles
+│   └── test_guardrails_integration.py  # Tests de integración
 ├── docs/
 │   ├── spec.md                   # Especificación con DCRs
 │   └── architecture.md           # Documentación de arquitectura
@@ -276,6 +280,45 @@ CREATE TABLE user_preferences (
 -- Checkpoints (manejado por LangGraph)
 -- Tabla creada automáticamente por langgraph-checkpoint-sqlite
 ```
+
+## 🛡️ Seguridad y Guardarraíles
+
+El bot implementa un sistema robusto de guardarraíles para garantizar que el modelo de IA solo se use para planificación de menús y no para otros propósitos:
+
+### Validación de Entrada
+- **Detección de Temas Prohibidos**: Identifica y rechaza solicitudes sobre programación, matemáticas, tareas escolares, asesoramiento financiero/legal, y otros temas no relacionados con comida
+- **Análisis de Patrones de Código**: Detecta código fuente en los mensajes y lo rechaza automáticamente
+- **Filtrado de Frases**: Identifica frases específicas que indican intenciones fuera del ámbito (ej: "ayúdame con mi tarea", "escribe código")
+- **Análisis de Palabras Clave**: Compara palabras clave del mensaje con listas de temas permitidos y prohibidos
+- **🆕 LLM-as-a-Judge**: Para casos ambiguos, utiliza el propio LLM para clasificar si la solicitud está relacionada con planificación de menús
+  - Se activa automáticamente para mensajes largos sin palabras clave claras
+  - Usa un modelo rápido (gpt-4o-mini) con temperatura 0 para clasificación consistente
+  - **Structured Output**: Usa Pydantic para garantizar formato de respuesta (JudgeResponse)
+  - Solo rechaza cuando el LLM tiene alta/media confianza de que NO es sobre comida
+  - Estrategia "fail-open": en caso de error, permite la solicitud (seguridad sin bloquear usuarios legítimos)
+
+### Validación de Salida
+- **Revisión de Respuestas**: Verifica que las respuestas del modelo no contengan código, notación matemática avanzada u otro contenido fuera de tema
+- **Detección de Bloques de Código**: Identifica código en las respuestas (```python, ```javascript, etc.)
+- **Detección de Fórmulas**: Identifica notación matemática LaTeX ($...$, \\[...\\])
+
+### Sistema de Rechazo Amigable
+Cuando se detecta una solicitud fuera de tema, el bot:
+1. Rechaza la solicitud educadamente
+2. Explica que es un especialista en planificación de menús únicamente
+3. Ofrece ayuda con temas relacionados con comidas
+4. Registra el evento para auditoría de seguridad
+
+### Estadísticas y Monitoreo
+- Seguimiento de rechazos para análisis de seguridad
+- Registro detallado de activaciones de guardarraíles
+- Métricas disponibles a través de `agent.get_guardrail_stats()`
+
+### Prompt del Sistema Reforzado
+El prompt del sistema incluye instrucciones explícitas para:
+- Rechazar cualquier solicitud no relacionada con comida/menús/nutrición
+- Mantenerse estrictamente dentro del ámbito de planificación alimentaria
+- No proporcionar ayuda con programación, matemáticas, tareas, finanzas, etc.
 
 ## 🐳 Docker
 

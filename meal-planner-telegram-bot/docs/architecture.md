@@ -149,6 +149,29 @@ graph.add_edge("save_preferences", END)
 - CRUD operations for users and preferences
 - Does NOT manage checkpoints (LangGraph handles that)
 
+#### `guardrails.py` - Security & Input Validation
+- **Input Validation**: Verifica que las solicitudes sean sobre planificación de menús
+- **Output Validation**: Asegura que las respuestas permanezcan en el tema
+- **Off-topic Detection**: Detecta y rechaza solicitudes de programación, matemáticas, tareas, etc.
+- **Keywords & Patterns**: Usa análisis de palabras clave y patrones regex
+- **LLM-as-a-Judge**: Clasificación inteligente para casos ambiguos usando el propio LLM
+- **Statistics Tracking**: Registra rechazos para análisis de seguridad
+
+**Tipos de Validación**:
+- Detección de palabras clave prohibidas (código, matemáticas, tareas escolares)
+- Análisis de patrones de código mediante regex
+- Identificación de frases específicas fuera de tema
+- **LLM-as-a-Judge para mensajes ambiguos**: Usa gpt-4o-mini para clasificar solicitudes sin palabras clave claras
+- Verificación de que respuestas no contengan código o fórmulas matemáticas
+
+**Flujo LLM-as-a-Judge**:
+1. Validación basada en reglas (rápida, sin costo)
+2. Si es ambiguo (mensaje largo sin keywords), consulta al LLM judge
+3. LLM usa **structured output** (Pydantic JudgeResponse) para garantizar formato
+4. LLM clasifica con confianza alta/media/baja
+5. Solo rechaza si confianza es alta/media y NO es sobre comida
+6. Estrategia "fail-open" en caso de error
+
 #### `telegram_client.py` - Telegram Integration
 - Message formatting (Markdown V2)
 - Response chunking for long messages
@@ -249,13 +272,26 @@ menu_handler receives message
        ▼
 LangGraphAgent.invoke(message, user_id)
        │
+       ├──▶ Input Validation (Guardrails)
+       │         │
+       │         ├── Check for off-topic keywords
+       │         ├── Check for code patterns
+       │         └── Validate meal-planning relevance
+       │
+       │    [If INVALID: Return rejection message]
+       │    [If VALID: Continue processing]
+       │
        ├──▶ retrieve_memory: Load user preferences from DB
        │
        ├──▶ chatbot: Generate response with LLM
        │         │
-       │         ├── System prompt with context
+       │         ├── System prompt with context and strict boundaries
        │         ├── User preferences injected
        │         └── Conversation history from checkpoint
+       │
+       ├──▶ Output Validation (Guardrails)
+       │         │
+       │         └── Verify response stays on-topic
        │
        ├──▶ extract_preferences (if new prefs detected)
        │         │
@@ -356,6 +392,16 @@ class Settings(BaseSettings):
 3. **Input Sanitization**: All user input validated before processing
 4. **Rate Limiting**: Telegram's built-in + optional custom limits
 5. **Error Messages**: No sensitive information exposed to users
+6. **Model Guardrails**: Sistema de validación multi-capa para prevenir uso indebido del LLM
+   - **Pre-LLM Validation**: Rechaza solicitudes fuera de tema antes de invocar el modelo (ahorra costos)
+   - **Post-LLM Validation**: Verifica que las respuestas permanezcan en el ámbito de planificación de menús
+   - **Detection Mechanisms**:
+     - Análisis de palabras clave (listas de permitidos/prohibidos)
+     - Patrones regex para detectar código fuente
+     - Identificación de frases específicas fuera de tema
+     - Validación de bloques de código y notación matemática en salidas
+   - **Logging & Monitoring**: Registra todos los rechazos para auditoría de seguridad
+   - **User Experience**: Mensajes de rechazo amigables que redirigen a temas apropiados
 
 ---
 
@@ -363,14 +409,15 @@ class Settings(BaseSettings):
 
 ```
 tests/
-├── conftest.py           # Pytest fixtures
-├── test_handlers.py      # Handler unit tests
-├── test_services.py      # Service unit tests
-├── test_models.py        # Model validation tests
-├── test_integration.py   # End-to-end tests
-└── mocks/
-    ├── telegram_mock.py  # Mock Telegram API
-    └── llm_mock.py       # Mock LLM responses
+├── conftest.py                    # Pytest fixtures
+├── test_handlers.py               # Handler unit tests
+├── test_services.py               # Service unit tests
+├── test_models_and_client.py      # Model validation tests
+├── test_langgraph_agent.py        # LangGraph agent tests
+├── test_guardrails.py             # Guardrails unit tests
+├── test_guardrails_integration.py # Guardrails integration tests
+├── test_sqlite_store.py           # SQLite store tests
+└── test_telegram_client.py        # Telegram client tests
 ```
 
 ---
